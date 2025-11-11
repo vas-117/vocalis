@@ -58,7 +58,7 @@ function ChallengeScreen({ onGoToMenu, onGoToProgress, selectedLevel = 1 }) {
       setStars(0);
       setRetryCount(0);
     }
-  }, [selectedLevel]);
+  }, [selectedLevel],levels);
 
   const saveProgress = (word, accuracy, level) => {
     const mastered = accuracy >= 80;
@@ -89,10 +89,15 @@ function ChallengeScreen({ onGoToMenu, onGoToProgress, selectedLevel = 1 }) {
 
   const sendToDeepgram = async (audioBlob) => {
     try {
-      const res = await fetch("https://api.deepgram.com/v1/listen?model=general", {
-        method: "POST",
-        headers: { Authorization: `Token ${process.env.REACT_APP_DEEPGRAM_KEY}` },
-        body: audioBlob,
+      const formData = new FormData();
+    formData.append('audioBlob', audioBlob, 'speech.webm');
+    formData.append('text', currentWord);
+
+    // 1. Change the URL to your new backend server
+    const res = await fetch("http://localhost:3001/api/check-speech", {
+      method: "POST",
+      // 2. Remove the Authorization header (the key is now on the server)
+      body: formData,
       });
       const data = await res.json();
       const spoken = data.results.channels[0].alternatives[0].transcript || "";
