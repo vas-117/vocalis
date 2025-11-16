@@ -5,23 +5,26 @@ import Confetti from "react-confetti";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWindowSize } from "react-use";
 
-function ChallengeScreen({ onGoToMenu, onGoToProgress, selectedLevel, token }) {
+function ChallengeScreen({ onGoToMenu, onGoToProgress, selectedLevel, token, onSelectLevel }) {
   const { width, height } = useWindowSize();
   const canvasRef = useRef(null);
   
-  // --- All your States ---
+  // --- States ---
+  const [words, setWords] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentWord, setCurrentWord] = useState("Loading...");
+  
+  const [levelName, setLevelName] = useState('');
+  const [nextLevelId, setNextLevelId] = useState(null);
+  const [nextLevelName, setNextLevelName] = useState(null);
+  const [isLevelComplete, setIsLevelComplete] = useState(false);
+
   const [isTimeAttack, setIsTimeAttack] = useState(selectedLevel === "TIME_ATTACK");
   const [timer, setTimer] = useState(60);
   const [score, setScore] = useState(0);
   const [botScore, setBotScore] = useState(0);
-const [botPace] = useState(16);
+  const [botPace] = useState(16);
   const [timeAttackOver, setTimeAttackOver] = useState(false);
-
-  const [currentLevel, setCurrentLevel] = useState(selectedLevel);
-  const [words, setWords] = useState([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [currentWord, setCurrentWord] = useState(isTimeAttack ? "Get Ready!" : "Loading...");
-
   const [feedback, setFeedback] = useState("");
   const [encouragement, setEncouragement] = useState("");
   const [accuracyValue, setAccuracyValue] = useState(null);
@@ -31,18 +34,11 @@ const [botPace] = useState(16);
   const [isAfterHear, setIsAfterHear] = useState(false);
   const [stars, setStars] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [gameComplete, setGameComplete] = useState(false);
   const [mediaStream, setMediaStream] = useState(null);
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
   const [lastRecordingURL, setLastRecordingURL] = useState(null);
   // --- End of States ---
-  // ... after const [gameComplete, setGameComplete] = useState(false);
-  
-  // --- ADD THESE NEW LINES ---
-  const [wordResults, setWordResults] = useState([]); // For the heatmap
-  const [showAdaptiveButtons, setShowAdaptiveButtons] = useState(false); // For "Practice" / "Save"
-  const [practiceWord, setPracticeWord] = useState(null); // For practicing one word
 
   const encouragements = [
     "You’re doing great! Let’s try once more 💪",
@@ -63,7 +59,7 @@ const [botPace] = useState(16);
       sounds[type].play().catch((e) => console.warn("Audio play failed", e));
     }
   };
-
+  
   // 🎵 VISUALIZER
   useEffect(() => {
     if (!mediaStream || !canvasRef.current) return;
@@ -108,9 +104,10 @@ const [botPace] = useState(16);
     return () => clearTimeout(timer);
   }, [showConfetti]);
 
-  // --- 1. HOOK: FOR LOADING WORDS ---
+  // --- LEVEL LOADING HOOK ---
   useEffect(() => {
     const setupLevel = async () => {
+      // Reset all states
       setStars(0);
       setRetryCount(0);
       setCombo(0);
@@ -120,7 +117,10 @@ const [botPace] = useState(16);
       setTimer(60);
       setBotScore(0);
       setLastRecordingURL(null);
-
+      setIsLevelComplete(false);
+      setNextLevelId(null);
+      setNextLevelName(null);
+      
       if (selectedLevel === "PRACTICE_DECK") {
         setFeedback("Loading your practice words...");
         setIsTimeAttack(false);
@@ -131,11 +131,12 @@ const [botPace] = useState(16);
           const practiceWords = await res.json();
           
           if (!practiceWords || practiceWords.length === 0) {
-            setFeedback("You've mastered all your words! Go practice!");
+            setFeedback("You've mastered all your words!");
             setWords([]);
             setCurrentWord("-");
+            setIsLevelComplete(true); // Nothing to practice
           } else {
-            setCurrentLevel("Practice");
+            setLevelName("Practice Deck");
             setWords(practiceWords);
             setCurrentIndex(0);
             setCurrentWord(practiceWords[0]);
@@ -143,52 +144,52 @@ const [botPace] = useState(16);
           }
         } catch (err) {
           console.error("Failed to fetch practice words", err);
-          setFeedback("Error loading practice deck. Go back to menu.");
+          setFeedback("Error loading practice deck.");
         }
       } else if (isTimeAttack) {
-        setFeedback("Get ready! Say the word!");
+         setFeedback("Get ready! Say the word!");
         try {
-          const res = await fetch('http://localhost:3001/api/level/TIME_ATTACK');
-          const timeAttackWords = await res.json();
-          setWords(timeAttackWords || []);
-          setCurrentWord((timeAttackWords && timeAttackWords.length) ? timeAttackWords[Math.floor(Math.random() * timeAttackWords.length)] : "No words");
+          const res = await fetch(`http://localhost:3001/api/level/TIME_ATTACK`);
+          const data = await res.json();
+          const timeAttackWords = data.words || [];
+          setWords(timeAttackWords);
+          setCurrentWord(timeAttackWords.length ? timeAttackWords[Math.floor(Math.random() * timeAttackWords.length)] : "No words");
+          setLevelName("Time Attack");
         } catch (err) {
           console.error("Failed to fetch time attack words", err);
-          setFeedback("Error loading game. Go back to menu.");
+          setFeedback("Error loading game.");
         }
       } else {
-        // NORMAL LEVEL MODE
-        if (selectedLevel) {
-          try {
-            const res = await fetch(`http://localhost:3001/api/level/${selectedLevel}`);
-            const levelWords = await res.json();
-            
-            if (!levelWords || levelWords.length === 0) {
-              throw new Error("Level has no words");
-            }
-
-            setCurrentLevel(selectedLevel);
-            setWords(levelWords);
-            setCurrentIndex(0);
-            setCurrentWord(levelWords[0]);
-          } catch (err) {
-            console.error("Failed to fetch level words", err);
-            setFeedback("Error loading level. Go back to menu.");
+        // --- NORMAL LEVEL LOGIC ---
+        try {
+          const res = await fetch(`http://localhost:3001/api/level/${selectedLevel}`);
+          const levelData = await res.json();
+          
+          if (!levelData || !levelData.words || levelData.words.length === 0) {
+            throw new Error("Level has no words");
           }
+          
+          setWords(levelData.words);
+          setCurrentIndex(0);
+          setCurrentWord(levelData.words[0]);
+          setLevelName(levelData.name); 
+          setNextLevelId(levelData.nextLevelId); 
+          setNextLevelName(levelData.nextLevelName); 
+          
+        } catch (err) {
+          console.error("Failed to fetch level words", err);
+          setFeedback("Error loading level. Go back to menu.");
         }
       }
     };
     
     setupLevel();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTimeAttack, selectedLevel, token]);
+  }, [selectedLevel, token, isTimeAttack]);
 
 
-  // --- 2. HOOK: FOR THE TIMER ---
+  // --- Timer useEffect ---
   useEffect(() => {
-    if (!isTimeAttack || timeAttackOver) {
-      return; 
-    }
+    if (!isTimeAttack || timeAttackOver) { return; }
     const interval = setInterval(() => {
       setBotScore((b) => b + botPace);
       setTimer((t) => {
@@ -201,44 +202,36 @@ const [botPace] = useState(16);
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [isTimeAttack, timeAttackOver]);
-
+  }, [isTimeAttack, timeAttackOver, botPace]);
 
   // SAVE PROGRESS (Sends to DB)
   const saveProgress = async (word, accuracy) => {
-  if (!token) return;
+    if (!token) return;
+    const mastered = accuracy >= 80;
+    const entry = {
+      word,
+      accuracy,
+      mastered,
+      level: selectedLevel, // Save the level ID (e.g., "animals-easy")
+      date: new Date().toISOString()
+    };
 
-  const mastered = accuracy >= 80;
-
-  const entry = {
-    word,
-    accuracy,
-    mastered,
-    level: selectedLevel, 
-    date: new Date().toISOString()
+    try {
+      const res = await fetch("http://localhost:3001/api/progress", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify(entry),
+      });
+      if (!res.ok) console.error("Progress save failed:", await res.text());
+    } catch (err) {
+      console.error("Error saving progress:", err);
+    }
   };
 
-  try {
-    const res = await fetch("http://localhost:3001/api/progress", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-      },
-      body: JSON.stringify(entry),
-    });
-
-    if (!res.ok) {
-      console.error("Progress save failed:", await res.text());
-    } else {
-      console.log("Progress saved:", entry);
-    }
-  } catch (err) {
-    console.error("Error saving progress:", err);
-  }
-};
-
-  // computeAccuracy (Helper function)
+  // --- (computeAccuracy, sendToDeepgram, handleMicClick) ---
   const computeAccuracy = (spoken, expected) => {
     spoken = (spoken || "").toUpperCase().replace(/[^A-Z ]/g, "");
     expected = (expected || "").toUpperCase().replace(/[^A-Z ]/g, "");
@@ -251,9 +244,8 @@ const [botPace] = useState(16);
     if (raw >= 70 && Math.abs(spoken.length - expected.length) <= 1)
       return Math.min(100, raw + 20);
     return raw;
-   };
+  };
 
-  // sendToDeepgram (Talks to our server)
   const sendToDeepgram = async (audioBlob) => {
     if (timeAttackOver) return; 
     try {
@@ -278,9 +270,8 @@ const [botPace] = useState(16);
     }
   };
 
-  // handleMicClick (Saves the recording)
   const handleMicClick = async () => {
-    if (isRecording || timeAttackOver || words.length === 0) return;
+    if (isRecording || timeAttackOver || words.length === 0 || isLevelComplete) return;
     setIsRecording(true);
     setFeedback(`🎙️ Listening... say "${currentWord}"`);
     setEncouragement("");
@@ -310,7 +301,7 @@ const [botPace] = useState(16);
     }
   };
 
-  // --- handleResult (THIS IS THE FIX) ---
+  // --- handleResult Function ---
   const handleResult = (acc) => {
     if (timeAttackOver) return; 
     
@@ -320,17 +311,12 @@ const [botPace] = useState(16);
       setFeedback("🌟 Great!");
       setStars(3);
       
-      // --- FIX: Separated the state updates ---
       const newCombo = combo + 1;
       setCombo(newCombo);
       setMaxCombo((prev) => Math.max(prev, newCombo));
-      if (isTimeAttack) {
-        setScore((s) => s + 100 + newCombo * 10);
-      }
-      // --- END OF FIX ---
+      if (isTimeAttack) setScore((s) => s + 100 + newCombo * 10);
       
       saveProgress(currentWord, acc);
- // This will now run
 
       if (isTimeAttack) {
         setTimer((t) => t + 2);
@@ -338,7 +324,7 @@ const [botPace] = useState(16);
       } else {
         setEncouragement("");
         setShowConfetti(true);
-        setTimeout(() => nextWord(), 2500);
+        setTimeout(() => nextWord(), 2500); 
       }
       
     } else {
@@ -347,9 +333,7 @@ const [botPace] = useState(16);
       setFeedback("💬 Try again!");
       setStars(acc > 50 ? 2 : acc > 0 ? 1 : 0);
       setCombo(0); 
-      
       saveProgress(currentWord, acc);
- // This will now run
 
       if (isTimeAttack) {
         setTimeout(loadNextWord, 800);
@@ -365,7 +349,7 @@ const [botPace] = useState(16);
     }
   };
 
-  // loadNextWord (For Time Attack)
+  // --- loadNextWord (For Time Attack) ---
   const loadNextWord = () => {
     if (timeAttackOver) return;
     const next = words.length ? words[Math.floor(Math.random() * words.length)] : "No words";
@@ -376,51 +360,31 @@ const [botPace] = useState(16);
     setLastRecordingURL(null);
   };
 
-  // nextWord (For Normal Mode)
+  // --- nextWord FUNCTION (for Normal Mode) ---
   const nextWord = () => {
     const next = currentIndex + 1;
+    
     if (next < words.length) {
+      // 1. More words in this level
       setCurrentIndex(next);
       setCurrentWord(words[next]);
     } else {
-      if (selectedLevel === "PRACTICE_DECK") {
-        playSound("complete");
-        setShowConfetti(true);
-        setGameComplete(true);
+      // 2. Last word in the level
+      playSound("complete");
+      setShowConfetti(true);
+      setIsLevelComplete(true); // This will show the new buttons
+      
+      // THIS IS THE CORRECTED LOGIC from your database screenshot
+      if (nextLevelId && nextLevelId !== "null" && nextLevelName && nextLevelName !== "null") {
+        setFeedback(`🏁 Level Complete!`);
+      } else if (selectedLevel === "PRACTICE_DECK") {
         setFeedback("🏆 Practice complete! Great job!");
-      } 
-      else if (Number(currentLevel) < 3) {
-        playSound("complete");
-        setFeedback(`🏁 Level ${currentLevel} Complete! Loading next level...`);
-        setShowConfetti(true);
-        
-        setTimeout(async () => {
-          const newLevel = Number(currentLevel) + 1;
-          try {
-            const res = await fetch(`http://localhost:3001/api/level/${newLevel}`);
-            const levelWords = await res.json();
-            if (!levelWords || levelWords.length === 0) throw new Error("No words for next level");
-            setCurrentLevel(newLevel.toString());
-            setWords(levelWords);
-            setCurrentIndex(0);
-            setCurrentWord(levelWords[0]);
-            setFeedback(`🎯 Welcome to Level ${newLevel}!`);
-            setStars(0);
-            setAccuracyValue(null);
-          } catch (err) {
-            console.error("Failed to load next level", err);
-            setFeedback("Couldn't load next level. Going to menu.");
-            setTimeout(onGoToMenu, 2000);
-          }
-        }, 2500);
       } else {
-        // This was the last level (Level 3)
-        playSound("complete");
-        setShowConfetti(true);
-        setGameComplete(true);
-        setFeedback("🏆 You’ve mastered all levels! Amazing job!");
+        setFeedback("🏆 You’ve mastered this series! Amazing job!");
       }
     }
+    
+    // Reset for the next word (or for the end screen)
     setRetryCount(0);
     setStars(0);
     setAccuracyValue(null);
@@ -429,7 +393,7 @@ const [botPace] = useState(16);
     setLastRecordingURL(null);
   };
 
-  // handleHearIt (Text-to-speech)
+  // --- handleHearIt function ---
   const handleHearIt = () => {
     const utter = new SpeechSynthesisUtterance(currentWord);
     utter.rate = 0.55;
@@ -441,27 +405,22 @@ const [botPace] = useState(16);
     setIsAfterHear(true);
   };
 
-  // Time Attack Game Over Screen
+  // --- Time Attack Game Over screen ---
   if (timeAttackOver) {
     const didWin = score > botScore;
     return (
       <div className="App-header">
-        {/* --- 4. NEW WIN/LOSE HEADER --- */}
         {didWin ? (
           <h1 style={{ color: '#00c896' }}>🎉 You Win! 🎉</h1>
         ) : (
-          <h1 style={{ color: '#d90429' }}>🤖 Try Again!</h1> // Changed to "Try Again!"
+          <h1 style={{ color: '#d90429' }}>🤖 Try Again!</h1>
         )}
-        
         <p style={{ fontSize: '1.5rem', margin: '10px' }}>Your Final Score:</p>
         <div style={{ fontSize: '4rem', fontWeight: 'bold', color: didWin ? '#00c896' : '#333' }}>
           {score}
         </div>
-
-        <p style={{ fontSize: '1.2rem' }}>Bot's Score: {botScore}</p> {/* <-- Show target */}
+        <p style={{ fontSize: '1.2rem' }}>Bot's Score: {botScore}</p>
         <p>You got a {maxCombo}-word combo!</p>
-        {/* --- END OF NEW HEADER --- */}
-        
         <button className="next-btn" onClick={onGoToMenu} style={{ marginTop: "30px" }}>
           🏠 Back to Menu
         </button>
@@ -469,7 +428,7 @@ const [botPace] = useState(16);
     );
   }
 
-  // --- RENDER ---
+  // --- MAIN RENDER ---
   return (
     <div className="game-wrapper">
       {showConfetti && !isTimeAttack && <Confetti width={width} height={height} numberOfPieces={150} gravity={0.3} tweenDuration={6000} recycle={false} />}
@@ -483,18 +442,16 @@ const [botPace] = useState(16);
           {isTimeAttack ? (
             <div className="time-attack-hud">
               <div>Your Score: <span>{score}</span></div>
-              {/* --- 5. SHOW BOT SCORE IN HUD --- */}
               <div>Time: <span>{timer}s</span></div>
-              {/* --- END OF HUD CHANGE --- */}
             </div>
           ) : (
             <div className="level-header">
-              <span>Level {currentLevel}</span>
+              <span>{levelName}</span> 
               <div className="progress-bar">
                 <div
                   className="progress-fill"
                   style={{
-                    width: words.length > 0 ? `${((currentIndex + 1) / words.length) * 100}%` : "0%",
+                    width: isLevelComplete ? "100%" : (words.length > 0 ? `${((currentIndex + 1) / words.length) * 100}%` : "0%"),
                   }}
                 ></div>
               </div>
@@ -502,71 +459,108 @@ const [botPace] = useState(16);
           )}
         </div>
 
-        <motion.div className="word-bubble" initial={{ scale: 0 }} animate={{ scale: 1 }}>
-          {currentWord}
-        </motion.div>
-
-        <div style={{ height: "40px", marginBottom: "10px" }}>
-          <AnimatePresence>
-            {combo >= 2 && (
-              <motion.div
-                key={combo}
-                initial={{ scale: 0.5, opacity: 0 }}
-                animate={{ scale: 1.2, opacity: 1 }}
-                exit={{ scale: 0, opacity: 0 }}
-                style={{
-                  fontSize: "1.5rem",
-                  fontWeight: "bold",
-                  color: "#ff4757",
-                  textShadow: "0 2px 10px rgba(255, 71, 87, 0.4)",
-                  background: "#fff0f1",
-                  padding: "5px 20px",
-                  borderRadius: "20px",
-                  border: "2px solid #ff4757",
-                }}
-              >
-                🔥 COMBO x{combo}!
+        {/* --- BUTTON & CONTENT LOGIC CONTAINER --- */}
+        <div className="button-controls-container" style={{display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%'}}>
+          
+          {/* --- A) While level is IN PROGRESS --- */}
+          {!isLevelComplete && !isTimeAttack && (
+            <>
+              <motion.div className="word-bubble" initial={{ scale: 0 }} animate={{ scale: 1 }}>
+                {currentWord}
               </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
 
-        {!isTimeAttack && (
-          <div className="star-container">
-            {[1, 2, 3].map((s) => (
-              <span key={s} className={s <= stars ? "star active" : "star"}>⭐</span>
-            ))}
-          </div>
-        )}
+              <div style={{ height: "40px", marginBottom: "10px" }}>
+                <AnimatePresence>
+                  {combo >= 2 && ( 
+                    <motion.div
+                      key={combo}
+                      initial={{ scale: 0.5, opacity: 0 }}
+                      animate={{ scale: 1.2, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      style={{
+                        fontSize: "1.5rem",
+                        fontWeight: "bold",
+                        color: "#ff4757",
+                        textShadow: "0 2px 10px rgba(255, 71, 87, 0.4)",
+                        background: "#fff0f1",
+                        padding: "5px 20px",
+                        borderRadius: "20px",
+                        border: "2px solid #ff4757",
+                      }}
+                    >
+                      🔥 COMBO x{combo}!
+                    </motion.div> 
+                  )}
+                </AnimatePresence>
+              </div>
 
-        {isRecording && <canvas ref={canvasRef} width={200} height={60} style={{ margin: "10px 0" }} />}
-
-        <button className="mic-btn" onClick={handleMicClick} disabled={isRecording || words.length === 0}>
-          {isRecording ? "🛑 Recording..." : isAfterHear ? "🎙️ Try Again" : "🎙️ Speak"}
-        </button>
-
-        <div className="button-row" style={{ display: "flex", gap: "15px", marginTop: "10px" }}>
-          {!isTimeAttack && showHearIt && (
-            <motion.button onClick={handleHearIt} className="hear-btn" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              👂 Hear It
-            </motion.button>
+              <div className="star-container">
+                {[1, 2, 3].map((s) => ( <span key={s} className={s <= stars ? "star active" : "star"}>⭐</span> ))}
+              </div>
+              
+              {isRecording && <canvas ref={canvasRef} width={200} height={60} style={{ margin: "10px 0" }} />}
+              
+              <button className="mic-btn" onClick={handleMicClick} disabled={isRecording || words.length === 0}>
+                {isRecording ? "🛑 Recording..." : isAfterHear ? "🎙️ Try Again" : "🎙️ Speak"}
+              </button>
+              
+              <div className="button-row" style={{ display: "flex", gap: "15px", marginTop: "10px" }}>
+                {showHearIt && ( <motion.button onClick={handleHearIt} className="hear-btn" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>👂 Hear It</motion.button> )}
+                {lastRecordingURL && ( <motion.button onClick={() => new Audio(lastRecordingURL).play()} className="playback-btn" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>🎧 Play My Audio</motion.button> )}
+              </div>
+              
+              {feedback && <motion.div className="feedback-banner" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>{feedback}</motion.div>}
+              {encouragement && <motion.p className="encouragement" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>{encouragement}</motion.p>}
+              {accuracyValue !== null && <motion.p className="accuracy subtle" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>Accuracy: {accuracyValue}%</motion.p>}
+              
+              {!isRecording && !showHearIt && (
+                <button className="next-btn" onClick={nextWord}>Next ⏭️</button>
+              )}
+            </>
           )}
 
-          {!isTimeAttack && lastRecordingURL && (
-            <motion.button onClick={() => new Audio(lastRecordingURL).play()} className="playback-btn" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              🎧 Play My Audio
-            </motion.button>
+          {/* --- B) When level is COMPLETE --- */}
+          {isLevelComplete && !isTimeAttack && (
+            <>
+              {feedback && <motion.div className="feedback-banner" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{fontSize: '1.5rem', padding: '20px', margin: '50px 0'}}>{feedback}</motion.div>}
+              
+              {/* --- THIS IS THE FINAL FIX --- */}
+              <motion.div 
+                style={{ display: 'flex', gap: '15px', marginTop: '20px' }}
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: 0.2 }}
+              >
+                {/* THIS IS THE FIX:
+                  It now checks if nextLevelId and nextLevelName are "truthy" 
+                  AND that they are not equal to the string "null".
+                  This will correctly show "Back to Menu" when the level ends.
+                */}
+                {nextLevelId && nextLevelId !== "null" && nextLevelName && nextLevelName !== "null" ? (
+                  <button 
+                    className="next-btn" 
+                    onClick={() => onSelectLevel(nextLevelId)} 
+                    style={{ background: "#007cff" }}
+                  >
+                    Go to {nextLevelName} 🚀
+                  </button>
+                ) : (
+                  <button className="next-btn" onClick={onGoToMenu} style={{background: "#ffb84d"}}>
+                    ⬅ Back to Menu
+                  </button>
+                )}
+
+                {/* Button 2: Always show "View My Progress" */}
+                <button className="next-btn" onClick={onGoToProgress} style={{ background: "#00c896" }}>
+                  View My Progress 📊
+                </button>
+              </motion.div>
+              {/* --- END OF FINAL FIX --- */}
+            </>
           )}
+          
         </div>
 
-        {feedback && <motion.div className="feedback-banner" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>{feedback}</motion.div>}
-        {encouragement && <motion.p className="encouragement" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>{encouragement}</motion.p>}
-
-        {accuracyValue !== null && <motion.p className="accuracy subtle" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>Accuracy: {accuracyValue}%</motion.p>}
-
-        {!isTimeAttack && !gameComplete && <button className="next-btn" onClick={nextWord}>Next ⏭️</button>}
-
-        {gameComplete && <button className="next-btn" onClick={onGoToProgress} style={{ background: "#00c896" }}>View My Progress 📊</button>}
       </header>
     </div>
   );
