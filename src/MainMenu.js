@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion'; 
 
-function MainMenu({ user, onStartChallenge, onShowProgress, token }) {
+function MainMenu({ user, onStartChallenge, onShowProgress, token, onLogout }) {
   const [stats, setStats] = useState({ streak: 0, xp: 0 });
   
   useEffect(() => {
@@ -129,6 +129,17 @@ function MainMenu({ user, onStartChallenge, onShowProgress, token }) {
           📊 My Stats
         </motion.button>
       </div>
+      <motion.button 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+        onClick={onLogout}
+        className="auth-toggle-btn" // Reuse existing style for a simple link button
+        style={{ marginTop: '40px' }} // Add some space
+      >
+        Log Out
+      </motion.button>
+      {/* --- END OF LOGOUT BUTTON --- */}
     </header>
   );
 }
