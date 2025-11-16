@@ -14,7 +14,7 @@ function ChallengeScreen({ onGoToMenu, onGoToProgress, selectedLevel, token }) {
   const [timer, setTimer] = useState(60);
   const [score, setScore] = useState(0);
   const [botScore, setBotScore] = useState(0);
-  const [botPace] = useState(20);
+const [botPace] = useState(16);
   const [timeAttackOver, setTimeAttackOver] = useState(false);
 
   const [currentLevel, setCurrentLevel] = useState(selectedLevel);
@@ -450,7 +450,7 @@ function ChallengeScreen({ onGoToMenu, onGoToProgress, selectedLevel, token }) {
         {didWin ? (
           <h1 style={{ color: '#00c896' }}>🎉 You Win! 🎉</h1>
         ) : (
-          <h1 style={{ color: '#d90429' }}>🤖 Bot Wins!</h1>
+          <h1 style={{ color: '#d90429' }}>🤖 Try Again!</h1> // Changed to "Try Again!"
         )}
         
         <p style={{ fontSize: '1.5rem', margin: '10px' }}>Your Final Score:</p>
@@ -458,9 +458,8 @@ function ChallengeScreen({ onGoToMenu, onGoToProgress, selectedLevel, token }) {
           {score}
         </div>
 
-        <p style={{ fontSize: '1.2rem' }}>Bot's Score: {botScore}</p>
+        <p style={{ fontSize: '1.2rem' }}>Bot's Score: {botScore}</p> {/* <-- Show target */}
         <p>You got a {maxCombo}-word combo!</p>
-        
         {/* --- END OF NEW HEADER --- */}
         
         <button className="next-btn" onClick={onGoToMenu} style={{ marginTop: "30px" }}>
@@ -483,8 +482,10 @@ function ChallengeScreen({ onGoToMenu, onGoToProgress, selectedLevel, token }) {
 
           {isTimeAttack ? (
             <div className="time-attack-hud">
-              <div>Score: <span>{score}</span></div>
+              <div>Your Score: <span>{score}</span></div>
+              {/* --- 5. SHOW BOT SCORE IN HUD --- */}
               <div>Time: <span>{timer}s</span></div>
+              {/* --- END OF HUD CHANGE --- */}
             </div>
           ) : (
             <div className="level-header">
