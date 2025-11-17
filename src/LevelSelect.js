@@ -2,13 +2,10 @@
 import React, { useState, useEffect } from "react";
 import "./App.css";
 
-// --- NEW HELPER FUNCTION to capitalize theme names ---
 function capitalize(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-// --- NEW CSS for the "Pack" layout ---
-// We can inject styles directly for this one-time change.
 const styles = {
   packContainer: {
     background: 'rgba(255, 255, 255, 0.5)',
@@ -32,68 +29,192 @@ const styles = {
     justifyContent: 'center',
     gap: '20px',
   },
-  // We'll reuse your .level-card for the buttons
+  categorySelectorGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '20px',
+    width: '100%',
+    maxWidth: '800px',
+    margin: '20px 0',
+  },
+  categorySquare: {
+    height: '200px',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    fontSize: '1.5rem',
+    fontWeight: 'bold',
+    borderRadius: '15px',
+    cursor: 'pointer',
+    transition: 'transform 0.2s, box-shadow 0.2s',
+    color: 'white',
+    textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)',
+    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.15)',
+  },
+  categoryEmoji: {
+    fontSize: '3rem',
+    marginBottom: '10px',
+  },
+  // NEW STYLE: Forcing the special mode cards to be flexible and equal width
+  specialModeCardStyle: {
+    flex: '1 1 0', // flex-grow: 1, flex-shrink: 1, flex-basis: 0
+    minWidth: '200px' // Ensure they don't get too small
+  }
 };
 
+// CATEGORY DEFINITIONS FOR THE MAIN SELECTOR
+const categories = [
+    { name: 'Animals', emoji: '🦁', slug: 'animals', color: '#6be07d' },
+    { name: 'School', emoji: '📚', slug: 'school', color: '#ffb84d' },
+    { name: 'Family', emoji: '👨‍👩‍👧‍👦', slug: 'family', color: '#007cff' },
+];
 
-function LevelSelect({ onSelectLevel, onGoToMenu }) {
-  // --- 1. NEW STATE TO HOLD GROUPED LEVELS ---
+
+function LevelSelect({ onSelectLevel, onGoToMenu, onSelectCategory, selectedCategory, onGoToCategorySelect }) {
   const [groupedLevels, setGroupedLevels] = useState({});
   const [specialLevels, setSpecialLevels] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchLevels = async () => {
+      setIsLoading(true);
       try {
         const res = await fetch('http://localhost:3001/api/levels');
         const data = await res.json();
         
-        // --- 2. LOGIC TO GROUP THE LEVELS ---
         const groups = {};
         const special = [];
 
         for (const level of data) {
           if (level.id.includes('-')) {
-            // This is a themed level (e.g., "animals-easy")
-            const [theme, difficulty] = level.id.split('-'); // [ "animals", "easy" ]
+            const [theme, difficulty] = level.id.split('-'); 
             if (!groups[theme]) {
-              groups[theme] = []; // Create a new array for "animals"
+              groups[theme] = []; 
             }
-            // Add the level to its theme, with difficulty info
             groups[theme].push({ ...level, difficulty });
           } else {
-            // This is a special level (e.g., "TIME_ATTACK")
             special.push(level);
           }
         }
         
         setGroupedLevels(groups);
         setSpecialLevels(special);
+        setIsLoading(false);
 
       } catch (err) {
         console.error("Failed to fetch levels", err);
+        setIsLoading(false);
       }
     };
     fetchLevels();
   }, []);
 
-  // --- 3. NEW RENDER LOGIC ---
+
+  if (isLoading) {
+    return (
+      <div className="App-header" style={{ justifyContent: 'center' }}>
+        <h1>Loading Challenges...</h1>
+      </div>
+    );
+  }
+  
+  // --- VIEW 1: CATEGORY SELECTION MODE (selectedCategory is null) ---
+  if (!selectedCategory) {
+    return (
+      <div className="App-header" style={{ justifyContent: 'flex-start', paddingTop: '80px' }}>
+        {/* Back button goes to the Main Menu */}
+        <button onClick={onGoToMenu} className="back-btn">⬅ Back to Menu</button> 
+        <h1 style={{ marginTop: '0', marginBottom: '30px' }}>Choose a Challenge Category</h1>
+        
+        {/* Category Squares (Animals, School, Family) */}
+        <div style={styles.categorySelectorGrid}>
+            {categories.map((cat) => (
+                <div
+                    key={cat.slug}
+                    style={{ ...styles.categorySquare, backgroundColor: cat.color }}
+                    onClick={() => onSelectCategory(cat.slug)}
+                >
+                    <span style={styles.categoryEmoji} role="img" aria-label={cat.name}>
+                        {cat.emoji}
+                    </span>
+                    {cat.name}
+                </div>
+            ))}
+        </div>
+
+        {/* Special Modes (Time Attack, Practice Deck) */}
+        <div style={{...styles.packContainer, marginTop: '30px', maxWidth: '800px'}}>
+            <h2 style={styles.packTitle}>⭐ Special Modes</h2>
+            <div style={styles.difficultyGrid}>
+                {specialLevels.map((level) => (
+                    <div
+                        key={level.id}
+                        className="level-card"
+                        // COMBINE STYLES: Force cards to be equal width and side-by-side
+                        style={{ ...styles.specialModeCardStyle, backgroundColor: level.color || '#DDD' }} 
+                    >
+                        <h3>{level.name}</h3>
+                        <p>{level.description}</p>
+                        <button
+                            className="start-level-btn"
+                            onClick={() => onSelectLevel(level.id)}
+                        >
+                            Start 🚀
+                        </button>
+                    </div>
+                ))}
+                
+                {/* Personalized Practice */}
+                <div
+                    className="level-card"
+                    // COMBINE STYLES: Force cards to be equal width and side-by-side
+                    style={{ ...styles.specialModeCardStyle, backgroundColor: "#00c896" }} 
+                >
+                    <h3>📖 Personalized Practice</h3>
+                    <p>Your "Practice Later" words.</p>
+                    <button
+                        className="start-level-btn"
+                        onClick={() => onSelectLevel("PRACTICE_DECK")} 
+                    >
+                        Start 🚀
+                    </button>
+                </div>
+            </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- VIEW 2: LEVEL SELECTION MODE (Category is selected) ---
+  
+  const levelsToDisplay = groupedLevels[selectedCategory] || [];
+  const pageTitle = `${capitalize(selectedCategory)} Levels`;
+
   return (
     <div className="App-header" style={{ justifyContent: 'flex-start', paddingTop: '80px' }}>
-      <button onClick={onGoToMenu} className="back-btn">⬅ Menu</button>
-      <h1 style={{ marginTop: '0' }}>🎯 Choose a Challenge</h1>
+      {/* Back button goes to the Category Selection View */}
+      <button onClick={onGoToCategorySelect} className="back-btn">⬅ Back to Categories</button>
+      <h1 style={{ marginTop: '0' }}>{pageTitle}</h1>
       
-      {/* --- RENDER THE THEME PACKS --- */}
-      {Object.keys(groupedLevels).map((themeName) => (
-        <div key={themeName} style={styles.packContainer}>
-          <h2 style={styles.packTitle}>{capitalize(themeName)}</h2>
+      {/* RENDER THE FILTERED LEVELS */}
+      <div style={styles.packContainer}>
+          <h2 style={styles.packTitle}>Select Your Difficulty</h2>
           <div style={styles.difficultyGrid}>
-            {groupedLevels[themeName].map((level) => (
+            {levelsToDisplay
+             .sort((a, b) => {
+                const order = { 'easy': 1, 'medium': 2, 'hard': 3 };
+                return order[a.difficulty] - order[b.difficulty];
+             })
+             .map((level, index) => (
               <div
                 key={level.id}
                 className="level-card"
-                style={{ backgroundColor: level.color || '#DDD', width: '250px' }}
+                // Kept existing level card width for difficulty levels
+                style={{ backgroundColor: level.color || '#DDD', width: '250px' }} 
               >
-                <h3>{level.name}</h3>
+                {/* Display as Level 1, Level 2, Level 3 */}
+                <h3>{`Level ${index + 1}`}</h3> 
                 <p>{level.description}</p>
                 <button
                   className="start-level-btn"
@@ -104,47 +225,7 @@ function LevelSelect({ onSelectLevel, onGoToMenu }) {
               </div>
             ))}
           </div>
-        </div>
-      ))}
-
-      {/* --- RENDER THE SPECIAL LEVELS (like Time Attack) --- */}
-      <div style={styles.packContainer}>
-        <h2 style={styles.packTitle}>🔥 Special Modes</h2>
-        <div style={styles.difficultyGrid}>
-          {specialLevels.map((level) => (
-            <div
-              key={level.id}
-              className="level-card"
-              style={{ backgroundColor: level.color || '#DDD', width: '250px' }}
-            >
-              <h3>{level.name}</h3>
-              <p>{level.description}</p>
-              <button
-                className="start-level-btn"
-                onClick={() => onSelectLevel(level.id)}
-              >
-                Start 🚀
-              </button>
-            </div>
-          ))}
-
-          {/* This one is still hard-coded, which is fine! */}
-          <div
-            className="level-card"
-            style={{ backgroundColor: "#00c896", width: '250px' }} 
-          >
-            <h3>🧠 Personalized Practice</h3>
-            <p>Your "Practice Later" words.</p>
-            <button
-              className="start-level-btn"
-              onClick={() => onSelectLevel("PRACTICE_DECK")} // Special ID
-            >
-              Start 🚀
-            </button>
-          </div>
-        </div>
       </div>
-
     </div>
   );
 }
