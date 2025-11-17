@@ -2,7 +2,6 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
-// <-- 1. ACCEPT onShowLeaderboard AS A PROP
 function MainMenu({ user, onStartChallenge, onShowProgress, token, onLogout, onShowLeaderboard }) {
   const [stats, setStats] = useState({ streak: 0, xp: 0 });
 
@@ -34,7 +33,7 @@ function MainMenu({ user, onStartChallenge, onShowProgress, token, onLogout, onS
 
     if (token) fetchProgress();
   }, [token]);
-
+    
   return (
     <div className="mainmenu-container">
 
@@ -83,12 +82,11 @@ function MainMenu({ user, onStartChallenge, onShowProgress, token, onLogout, onS
           className="menu-btn play-btn"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={onStartChallenge}
+          onClick={onStartChallenge} 
         >
           🎤 Start Speaking Game
         </motion.button>
 
-        {/* --- 2. ADD THE NEW BUTTON --- */}
         <motion.button
           className="menu-btn leaderboard-btn" 
           whileHover={{ scale: 1.05 }}
@@ -97,7 +95,6 @@ function MainMenu({ user, onStartChallenge, onShowProgress, token, onLogout, onS
         >
           🏆 Leaderboard
         </motion.button>
-        {/* --- END OF NEW BUTTON --- */}
 
         <motion.button
           className="menu-btn progress-btn"
