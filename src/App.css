@@ -1293,7 +1293,91 @@ body {
   border-radius: 20%;
   transform: translateX(-50%);
 }
+/* --- ADD THESE STYLES TO THE END OF src/App.css --- */
 
+/* New Leaderboard Button Style (purple) */
+.leaderboard-btn {
+  background: #9b59b6; 
+  color: white;
+}
+.leaderboard-btn:hover {
+  background: #8e44ad;
+}
+
+/* Leaderboard List Styles */
+.leaderboard-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  max-width: 500px;
+}
+
+.leaderboard-item {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px 15px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+  font-size: 1.1rem;
+}
+
+.leaderboard-rank {
+  font-weight: bold;
+  font-size: 1.2rem;
+  color: #ff7b00;
+  width: 40px;
+}
+
+.leaderboard-avatar {
+  font-size: 1.5rem;
+  margin-right: 10px;
+}
+
+.leaderboard-name {
+  font-weight: 600;
+  color: #333;
+}
+/* --- ADD THESE STYLES FOR PICTURE ROUND --- */
+
+.picture-round-image {
+  width: 100%;
+  max-width: 300px;
+  height: 300px;
+  border-radius: 20px;
+  background-color: #fff;
+  object-fit: contain; /* Use 'contain' to see the whole image */
+  padding: 15px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
+}
+
+.word-bubble-small {
+  font-size: 48px;
+  color: #ff6b00;
+  font-weight: 800;
+  background: #fff4d8;
+  padding: 0px 30px;
+  line-height: 80px;
+  border-radius: 50%; /* Make it a circle */
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  margin: 10px 0;
+}
+.leaderboard-score {
+  margin-left: auto;
+  color: #00c896;
+  font-size: 1.2rem;
+}
+
+.leaderboard-combo {
+  font-size: 0.9rem;
+  color: #777;
+  margin-left: 10px;
+  width: 80px; /* Align combos */
+  text-align: right;
+}
 /* Strings */
 .balloon-string {
   position: absolute;
