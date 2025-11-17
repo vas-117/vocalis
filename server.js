@@ -28,14 +28,14 @@ const UserSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', UserSchema);
 
-// src/server.js
-
+// --- Level Schema (Updated for Picture Round) ---
 const LevelSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true },
   description: { type: String },
   color: { type: String },
-  words: [{ type: String }],
+  // Words can now be strings OR objects ({text: "CAT", image: "url"})
+  words: [mongoose.Schema.Types.Mixed], 
   nextLevelId: { type: String, default: null }, 
   nextLevelName: { type: String, default: null } 
 });
@@ -51,7 +51,74 @@ const ProgressSchema = new mongoose.Schema({
 });
 const Progress = mongoose.model('Progress', ProgressSchema);
 
-// --- NEW! STREAK CALCULATION HELPER ---
+const leaderboardSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User', 
+    required: true
+  },
+  score: {
+    type: Number,
+    required: true
+  },
+  maxCombo: {
+    type: Number,
+    default: 0
+  },
+  date: {
+    type: Date,
+    default: Date.now
+  }
+});
+const Leaderboard = mongoose.model('Leaderboard', leaderboardSchema);
+
+// --- PICTURE LEVEL SEEDING (CAT, DOG, CAR, TREE, FISH) ---
+mongoose.connection.once('open', () => {
+  console.log('MongoDB connection open, checking for Picture Level...');
+  
+  const setupPictureLevel = async () => {
+    try {
+      const pictureLevelId = "PICTURE_ROUND_1";
+      const existingLevel = await Level.findOne({ id: pictureLevelId });
+
+      const newWords = [
+        { text: "CAT", image: "https://i.ibb.co/N7FwP1p/cat-icon.png" },
+        { text: "DOG", image: "https://i.ibb.co/wK40sS1/dog-icon.png" },
+        { text: "CAR", image: "https://i.ibb.co/dJtW3s6/car-icon.png" },
+        { text: "TREE", image: "https://i.ibb.co/fQ2B01Q/tree-icon.png" },
+        { text: "FISH", image: "https://i.ibb.co/yBNP21h/fish-icon.png" }
+      ];
+
+      if (existingLevel) {
+        console.log('Picture Round level exists. Updating words...');
+        existingLevel.words = newWords;
+        await existingLevel.save();
+        console.log('Picture Round words updated!');
+      } else {
+        console.log('Creating new Picture Round level...');
+        const pictureLevel = new Level({
+          id: pictureLevelId,
+          name: "🖼️ Picture Round 🖼️",
+          description: "Say what you see! (No text!)",
+          color: "#3498db", // A new blue color
+          words: newWords,
+          nextLevelId: null // It's a special level
+        });
+
+        await pictureLevel.save();
+        console.log('Picture Round level created successfully!');
+      }
+    } catch (err) {
+      console.error('Error setting up picture level:', err);
+    }
+  };
+
+  setupPictureLevel();
+});
+// --- END OF NEW SEEDING ---
+
+
+// --- STREAK CALCULATION HELPER ---
 function calculateStreak(progressEntries) {
   if (!progressEntries || progressEntries.length === 0) {
     return 0;
@@ -178,25 +245,22 @@ app.get('/api/levels', async (req, res) => {
   }
 });
 
-// --- THIS IS THE CORRECTED FUNCTION ---
 app.get('/api/level/:id', async (req, res) => {
   try {
     const level = await Level.findOne({ id: req.params.id });
     if (!level) {
-      return res.status(404).json({ error: 'Level not found' }); // <-- Corrected 404
+      return res.status(404).json({ error: 'Level not found' });
     }
-    res.json(level); // <-- Sends the whole object
+    res.json(level); 
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'Server error' });
   }
 });
-// --- END OF CORRECTION ---
 
 // --- PROGRESS ENDPOINTS ---
 app.get('/api/progress', authMiddleware, async (req, res) => {
   try {
-    // 1. Get all levels to create a "lookup" for names and colors
     const levels = await Level.find();
     const levelInfoMap = new Map();
     for (const level of levels) {
@@ -210,26 +274,20 @@ app.get('/api/progress', authMiddleware, async (req, res) => {
         color: "#00c896"
     });
 
-    // 2. Get ALL user progress entries
     const allProgressEntries = await Progress.find({ user: req.user.id }).sort({ date: -1 });
 
-    // 3. Filter out the themes you don't want to show
     const progressEntries = allProgressEntries.filter(p => {
-      // The p.level field holds the theme name (e.g., "1", "Hard Family")
       return p.level !== "1" && p.level !== "TIME_ATTACK"; 
     });
 
-    // 4. Calculate streak (using ALL entries, not just filtered ones)
     const streak = calculateStreak(allProgressEntries);
 
-    // 5. Group the (now filtered) progress entries by their 'level' field
     const progressByTheme = {};
 
     for (const p of progressEntries) {
       const themeId = p.level; 
       
       if (!progressByTheme[themeId]) {
-        // Use the themeId itself as the name if not found in map
         const info = levelInfoMap.get(themeId) || { name: themeId, color: '#CCC' };
         progressByTheme[themeId] = {
           themeName: info.name,
@@ -239,7 +297,6 @@ app.get('/api/progress', authMiddleware, async (req, res) => {
         };
       }
       
-      // Add the word to the correct list
       if (p.mastered) {
         if (!progressByTheme[themeId].mastered.includes(p.word)) {
           progressByTheme[themeId].mastered.push(p.word);
@@ -251,14 +308,12 @@ app.get('/api/progress', authMiddleware, async (req, res) => {
       }
     }
 
-    // 6. Convert the grouped object into an array
     const themedProgress = Object.values(progressByTheme);
     
-    // 7. Send the new data structure back
     res.json({
       themedProgress: themedProgress,
       streak: streak,
-      progress: allProgressEntries // Send all entries for average calculation
+      progress: allProgressEntries
     });
 
   } catch (err) {
@@ -287,7 +342,8 @@ app.post('/api/progress', authMiddleware, async (req, res) => {
     }
     await progress.save();
     res.json(progress);
-  } catch (err) {
+  } catch (err)
+ {
     console.error(err.message);
     res.status(500).json({ error: 'Server error' });
   }
@@ -296,13 +352,11 @@ app.post('/api/progress', authMiddleware, async (req, res) => {
 // --- ENDPOINT FOR THE PRACTICE DECK ---
 app.get('/api/progress/practice', authMiddleware, async (req, res) => {
   try {
-    // Find all words for this user that are NOT mastered
     const practiceWords = await Progress.find({ 
       user: req.user.id, 
       mastered: false 
-    }).select('word -_id'); // Only select the 'word' field, exclude '_id'
-
-    // Map the array of objects [ { word: 'CAT' } ] to an array of strings [ 'CAT' ]
+    }).select('word -_id'); 
+    
     const wordList = practiceWords.map(p => p.word);
     
     res.json(wordList);
@@ -315,16 +369,46 @@ app.get('/api/progress/practice', authMiddleware, async (req, res) => {
 // --- ENDPOINT TO CLEAR PROGRESS ---
 app.delete('/api/progress', authMiddleware, async (req, res) => {
   try {
-    // Get the user ID from the authentication middleware
     const userId = req.user.id;
-
-    // Delete all progress entries that match this user's ID
     await Progress.deleteMany({ user: userId });
-    
     res.json({ message: 'Progress cleared successfully' });
-
   } catch (err) {
     console.error(err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// --- LEADERBOARD ENDPOINTS ---
+app.post('/api/leaderboard', authMiddleware, async (req, res) => {
+  try {
+    const { score, maxCombo } = req.body;
+    const userId = req.user.id; 
+
+    const newScore = new Leaderboard({
+      user: userId,
+      score,
+      maxCombo
+    });
+
+    await newScore.save();
+    res.status(201).json(newScore);
+
+  } catch (err) {
+    console.error('Leaderboard save error:', err);
+    res.status(500).send('Server error');
+  }
+});
+
+app.get('/api/leaderboard', async (req, res) => {
+  try {
+    const topScores = await Leaderboard.find()
+      .sort({ score: -1 }) 
+      .limit(10)            
+      .populate('user', 'name avatar'); 
+
+    res.json(topScores);
+  } catch (err) {
+    console.error('Leaderboard fetch error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
