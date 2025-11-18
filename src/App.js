@@ -8,6 +8,7 @@ import ChallengeScreen from "./ChallengeScreen";
 import ProgressScreen from "./ProgressScreen";
 import LevelSelect from "./LevelSelect";
 import LeaderboardScreen from "./LeaderboardScreen"; 
+import AchievementScreen from "./AchievementScreen"; // <-- NEW IMPORT
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState("AUTH"); 
@@ -64,6 +65,10 @@ function App() {
   }
   
   const handleShowLeaderboard = () => setCurrentScreen("LEADERBOARD"); 
+
+  // --- NEW HANDLER ---
+  const handleShowAchievements = () => setCurrentScreen("ACHIEVEMENTS");
+  // --- END NEW HANDLER ---
   
   const handleLogout = () => {
     setUser(null);
@@ -107,7 +112,8 @@ function App() {
               token={token}
               onStartChallenge={handleStartChallenge} 
               onShowProgress={handleShowProgress}
-              onShowLeaderboard={handleShowLeaderboard} 
+              onShowLeaderboard={handleShowLeaderboard}
+              onShowAchievements={handleShowAchievements} // <-- NEW PROP
               onLogout={handleLogout}
             />
           </motion.div>
@@ -155,6 +161,17 @@ function App() {
             />
           </motion.div>
         )}
+
+        {/* --- NEW SCREEN --- */}
+        {currentScreen === "ACHIEVEMENTS" && (
+          <motion.div key="achievements" initial="initial" animate="in" exit="out" variants={pageVariants} transition={pageTransition} style={{ width: '100%', position: 'absolute' }}>
+            <AchievementScreen 
+              token={token}
+              onGoToMenu={handleGoToMenu} 
+            />
+          </motion.div>
+        )}
+        {/* --- END NEW SCREEN --- */}
 
       </AnimatePresence>
     </div>
