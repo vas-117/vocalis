@@ -1594,3 +1594,34 @@ body {
 .balloon1 { left: 18%; animation-duration: 17s; transform: scale(1); }
 .balloon2 { left: 50%; animation-duration: 21s; transform: scale(1.25); }
 .balloon3 { left: 78%; animation-duration: 18s; transform: scale(0.9); }
+
+/* --- ChallengeScreen Fixes --- */
+
+.challenge-content {
+  display: flex;
+  width: 100%;
+  gap: 20px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.challenge-left,
+.challenge-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.word-bubble-small {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 80px;
+}
+
+.word-bubble {
+  max-width: 90%;
+  word-break: break-word;
+}
