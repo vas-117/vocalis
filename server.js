@@ -72,6 +72,48 @@ const leaderboardSchema = new mongoose.Schema({
 });
 const Leaderboard = mongoose.model('Leaderboard', leaderboardSchema);
 
+// --- ACHIEVEMENT SCHEMAS (NEW) ---
+const AchievementSchema = new mongoose.Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  // This is the unique ID, e.g., "MASTER_1", "STREAK_3"
+  achievementId: {
+    type: String,
+    required: true
+  },
+  date: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+// Create a compound index to ensure a user can only get an achievement once
+AchievementSchema.index({ user: 1, achievementId: 1 }, { unique: true });
+
+const Achievement = mongoose.model('Achievement', AchievementSchema);
+
+// --- ACHIEVEMENT MASTER LIST (NEW - THIS IS WHAT WAS MISSING) ---
+const ALL_ACHIEVEMENTS_LIST = {
+  // Progress-Based
+  "MASTER_1": { name: "First Steps", description: "Master your first word." },
+  "MASTER_10": { name: "Word Wizard", description: "Master 10 different words." },
+  
+  // Streak-Based
+  "STREAK_3": { name: "Heating Up", description: "Maintain a 3-day streak." },
+  
+  // Score-Based (Time Attack)
+  "SCORE_TIME_ATTACK": { name: "Contender", description: "Post your first Time Attack score." },
+  "SCORE_1000": { name: "Time Attack Pro", description: "Score over 1,000 in Time Attack." },
+
+  // Completion-Based
+  "COMPLETE_PICTURE_ROUND": { name: "Visual Learner", description: "Master all words in the Picture Round." }
+  // Add more here as you think of them!
+};
+
+
 // --- PICTURE LEVEL SEEDING (CAT, DOG, CAR, TREE, FISH) ---
 mongoose.connection.once('open', () => {
   console.log('MongoDB connection open, checking for Picture Level...');
@@ -149,6 +191,86 @@ function calculateStreak(progressEntries) {
   return streak;
 }
 
+// --- ACHIEVEMENT LOGIC (NEW) ---
+
+/**
+ * Grants an achievement to a user if they don't already have it.
+ * This is a helper function to avoid granting duplicates.
+ */
+const grantAchievement = async (userId, achievementId) => {
+  try {
+    // Check if the user already has this achievement
+    const existing = await Achievement.findOne({ user: userId, achievementId: achievementId });
+    
+    // If they don't, create it.
+    if (!existing) {
+      console.log(`AWARDING achievement ${achievementId} to user ${userId}`);
+      const newAchievement = new Achievement({
+        user: userId,
+        achievementId: achievementId
+      });
+      await newAchievement.save();
+    }
+  } catch (err) {
+    // This might fail if two requests try to grant at the same time
+    // The unique index on the schema will catch it, so we can ignore the error
+    if (err.code !== 11000) { // 11000 is the duplicate key error
+      console.error(`Error granting achievement: ${err.message}`);
+    }
+  }
+};
+
+/**
+ * Checks all achievement rules for a user.
+ * This function is called from other endpoints (progress, leaderboard).
+ * We pass a 'context' object to tell us what triggered the check.
+ */
+const checkAndAwardAchievements = async (userId, context = {}) => {
+  // 1. Check PROGRESS-based achievements
+  const masteredWords = await Progress.find({ user: userId, mastered: true });
+  if (masteredWords.length >= 1) {
+    await grantAchievement(userId, 'MASTER_1');
+  }
+  if (masteredWords.length >= 10) {
+    await grantAchievement(userId, 'MASTER_10');
+  }
+
+  // 2. Check STREAK-based achievements
+  const allProgressEntries = await Progress.find({ user: userId });
+  const streak = calculateStreak(allProgressEntries);
+  if (streak >= 3) {
+    await grantAchievement(userId, 'STREAK_3');
+  }
+
+  // 3. Check SCORE-based achievements (if context.score exists)
+  if (context.score) {
+    // Assuming any score post is from Time Attack for now
+    await grantAchievement(userId, 'SCORE_TIME_ATTACK');
+    
+    if (context.score.score >= 1000) {
+      await grantAchievement(userId, 'SCORE_1000');
+    }
+  }
+
+  // 4. Check COMPLETION-based achievements (if context.progress exists)
+  if (context.progress && context.progress.level === 'PICTURE_ROUND_1') {
+    const pictureLevel = await Level.findOne({ id: 'PICTURE_ROUND_1' });
+    if (pictureLevel) {
+      const totalPictureWords = pictureLevel.words.length;
+      const masteredPictureWords = await Progress.countDocuments({
+        user: userId,
+        level: 'PICTURE_ROUND_1',
+        mastered: true
+      });
+
+      if (masteredPictureWords >= totalPictureWords) {
+        await grantAchievement(userId, 'COMPLETE_PICTURE_ROUND');
+      }
+    }
+  }
+};
+
+
 // --- Deepgram API Logic ---
 const DEEPGRAM_KEY = process.env.DEEPGRAM_KEY;
 if (DEEPGRAM_KEY) {
@@ -208,6 +330,7 @@ app.post('/api/auth/signup', async (req, res) => {
     });
   } catch (err) {
     console.error(err.message);
+    // --- THIS IS THE TYPO FIX ---
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -341,6 +464,13 @@ app.post('/api/progress', authMiddleware, async (req, res) => {
       });
     }
     await progress.save();
+    
+    // --- ADD THIS LINE (NEW) ---
+    // We don't 'await' this so it runs in the background
+    // and doesn't slow down the user's response.
+    checkAndAwardAchievements(userId, { progress: progress });
+    // --- END ADDITION ---
+
     res.json(progress);
   } catch (err)
  {
@@ -391,6 +521,12 @@ app.post('/api/leaderboard', authMiddleware, async (req, res) => {
     });
 
     await newScore.save();
+    
+    // --- ADD THIS LINE (NEW) ---
+    // We don't 'await' this so it runs in the background
+    checkAndAwardAchievements(userId, { score: newScore });
+    // --- END ADDITION ---
+
     res.status(201).json(newScore);
 
   } catch (err) {
@@ -412,6 +548,27 @@ app.get('/api/leaderboard', async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
+
+// --- ACHIEVEMENT ENDPOINTS (NEW) ---
+app.get('/api/achievements', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // 1. Get all achievements this user has earned
+    const earnedAchievements = await Achievement.find({ user: userId }).select('achievementId date');
+    console.log("SENDING ACHIEVEMENTS:", ALL_ACHIEVEMENTS_LIST);
+    // 2. Send back the master list AND the user's earned list
+    res.json({
+      allAchievements: ALL_ACHIEVEMENTS_LIST,
+      earnedAchievements: earnedAchievements
+    });
+
+  } catch (err) {
+    console.error('Achievement fetch error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 
 // --- Server Listen ---
 const PORT = 3001;
