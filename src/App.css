@@ -1594,3 +1594,113 @@ body {
 .balloon1 { left: 18%; animation-duration: 17s; transform: scale(1); }
 .balloon2 { left: 50%; animation-duration: 21s; transform: scale(1.25); }
 .balloon3 { left: 78%; animation-duration: 18s; transform: scale(0.9); }
+
+/* --- SPLIT SCREEN PICTURE LAYOUT --- */
+.challenge-content {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 900px;
+  gap: 40px;
+  margin-top: 20px;
+}
+
+/* Left side (word, speak, stars, etc) */
+.challenge-left {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Right side (picture) */
+.challenge-right {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Picture Card */
+.picture-right-image {
+  width: 250px;
+  height: 250px;
+  border-radius: 20px;
+  object-fit: contain;
+  background: white;
+  padding: 15px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.picture-layout {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 40px;
+  width: 100%;
+  margin-top: 20px;
+}
+
+.picture-round-card {
+  width: 260px;
+  height: 260px;
+  border-radius: 20px;
+  object-fit: contain;
+  background: white;
+  padding: 15px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.right-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.word-card {
+  font-size: 56px;
+  padding: 20px 40px;
+  background: #fff4d8;
+  border-radius: 30px;
+  font-weight: 800;
+  color: #ff6b00;
+}
+
+@media (max-width: 768px) {
+  .picture-layout {
+    flex-direction: column;
+    gap: 20px;
+  }
+}
+.challenge-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 90%;
+  max-width: 1100px;
+  margin-top: 40px;
+}
+
+.challenge-left {
+  flex: 1;
+  text-align: center;
+}
+
+.challenge-right {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.picture-right-image {
+  width: 320px;
+  height: 320px;
+  border-radius: 20px;
+  background: white;
+  padding: 15px;
+  object-fit: contain;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+}
